@@ -1,4 +1,4 @@
-# app.py: Executive Decision Intelligence Control Room (Liquid d1-ultra)
+# app.py: Executive Decision Intelligence Control Room (OpenRouter / Liquid d1-ultra)
 import os
 import time
 import json
@@ -8,19 +8,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 from typesafe_sdk import TypeSafeClient, Choice, Noul, Score
 
-DEFAULT_API_KEY = os.getenv("LIQUID_API_KEY", os.getenv("OPENROUTER_API_KEY", ""))
+# Retrieve key primarily from OpenRouter secret, fallback to UI override
+DEFAULT_API_KEY = os.getenv("OPENROUTER_API_KEY", os.getenv("LIQUID_API_KEY", ""))
 
 def resolve_client(override_key: str = ""):
     active_key = override_key.strip() if override_key and override_key.strip() else DEFAULT_API_KEY
     if not active_key:
         raise ValueError(
-            "Missing API Key. Set LIQUID_API_KEY in Space Secrets or enter it in the Settings drawer."
+            "Missing API Key. Set OPENROUTER_API_KEY in Space Secrets or enter it in the Settings drawer."
         )
-    base_url = "https://openrouter.ai/api/v1" if active_key.startswith("sk-or-") else "https://api.liquid.ai/v1"
+    
+    # Route directly via OpenRouter proxy endpoint
+    base_url = "https://openrouter.ai/api/v1"
     return TypeSafeClient(api_key=active_key, base_url=base_url, model="liquid/d1-ultra")
 
 # -------------------------------------------------------------
-# TAB 1: SINGLE-PASS TELEMETRY ROUTER (From Cell 3)
+# TAB 1: SINGLE-PASS TELEMETRY ROUTER
 # -------------------------------------------------------------
 def build_domain_request(domain, p1, p2):
     if domain == "Aviation Flight Dispatch":
@@ -94,7 +97,7 @@ def build_domain_request(domain, p1, p2):
                 }
             ),
             "hostile_jamming": Noul(
-                instructions="Is the signal an intentional or malicious jamming/denial-of-service source?"
+                instructions="Is this signal an intentional or malicious jamming/denial-of-service source?"
             ),
             "interference_impact": Score(
                 instructions="Rate co-channel interference impact on co-located receivers.",
@@ -153,7 +156,7 @@ def evaluate_decision(domain, p1, p2, threshold, user_key):
     <div style="background-color: #161b22; border-left: 5px solid {badge_color}; border-radius: 8px; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <div style="font-size: 15px; font-weight: bold; color: {badge_color};">{badge_title}</div>
-            <span style="background: #21262d; color: #58a6ff; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">Backbone: Liquid d1-ultra</span>
+            <span style="background: #21262d; color: #58a6ff; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 11px;">Backbone: OpenRouter / liquid/d1-ultra</span>
         </div>
         <div style="color: #c9d1d9; font-size: 13px; margin-top: 6px;">{routing_desc}</div>
         <div style="display: flex; gap: 24px; margin-top: 12px; font-family: monospace; font-size: 12px; color: #8b949e;">
@@ -203,7 +206,7 @@ def evaluate_decision(domain, p1, p2, threshold, user_key):
     plt.tight_layout()
 
     audit_payload = json.dumps({
-        "engine": "liquid/d1-ultra",
+        "engine": "openrouter/liquid/d1-ultra",
         "domain": domain,
         "latency_ms": round(latency_ms, 2),
         "routing_decision": badge_title,
@@ -217,7 +220,7 @@ def evaluate_decision(domain, p1, p2, threshold, user_key):
     return gate_html, fig, state, audit_payload
 
 # -------------------------------------------------------------
-# TAB 2: CALIBRATION & RELIABILITY AUDITOR (From Cell 4)
+# TAB 2: CALIBRATION & RELIABILITY AUDITOR
 # -------------------------------------------------------------
 CALIBRATION_CASES = [
     ("S&P up 0.2%, VIX at 12.8, yields stable, low options activity.", False),
@@ -278,7 +281,7 @@ def run_calibration_audit(user_key):
     return metrics_md, fig
 
 # -------------------------------------------------------------
-# TAB 3: CONCURRENCY & LATENCY PROFILER (From Cell 5)
+# TAB 3: CONCURRENCY & LATENCY PROFILER
 # -------------------------------------------------------------
 def run_stress_test(num_requests, workers, user_key):
     client = resolve_client(user_key)
@@ -320,11 +323,11 @@ body { background-color: #0a0d14 !important; color: #f0f6fc !important; }
 with gr.Blocks(theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate"), css=css, title="Liquid d1 Control Room") as demo:
     gr.Markdown("""
     # 🛰️ Decision Intelligence Engine: Executive Control Room
-    **Liquid AI d1-ultra Backbone** • Single-pass deterministic probability calibration across Aviation Operations, Macro Financial Shocks, and RF Spectrum Telemetry.
+    **OpenRouter / Liquid AI d1-ultra Backbone** • Single-pass deterministic probability calibration across Aviation Operations, Macro Financial Shocks, and RF Spectrum Telemetry.
     """)
 
     with gr.Accordion("⚙️ Security & Infrastructure (API Key Override)", open=False):
-        api_key_tb = gr.Textbox(label="Liquid / OpenRouter Key (Optional if Space Secret is set)", type="password", placeholder="liquid-... or sk-or-...")
+        api_key_tb = gr.Textbox(label="OpenRouter Key (Optional if Space Secret is set)", type="password", placeholder="sk-or-...")
 
     with gr.Tabs():
         with gr.TabItem("🎯 1. Live Telemetry Router"):
