@@ -2,4 +2,4 @@ gradio>=4.40.0
 typesafe-sdk>=0.1.0
 matplotlib>=3.5.0
 numpy>=1.20.0
-audioop-lts; python_version >= "3.13"
+pyaudioop
