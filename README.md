@@ -2,7 +2,7 @@
 title: Decision Intelligence Engine
 emoji: 🛰️
 colorFrom: blue
-colorTo: slate
+colorTo: gray
 sdk: gradio
 sdk_version: "5.0.0"
 app_file: app.py
