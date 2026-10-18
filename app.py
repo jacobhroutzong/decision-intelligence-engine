@@ -328,9 +328,52 @@ body { background-color: #0a0d14 !important; color: #f0f6fc !important; }
 .gradio-container { max-width: 1220px !important; margin: auto; }
 """
 
-with gr.Blocks(theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate"), css=css, title="Liquid d1 Control Room") as demo:
+
+custom_css = """
+.gradio-container {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+.hero-header {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+.metric-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 8px;
+    border: 1px solid #30363d;
+    background: #21262d;
+    color: #58a6ff;
+}
+.tab-explainer {
+    background: #161b22;
+    border-left: 4px solid #1f6feb;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #c9d1d9;
+}
+"""
+
+with gr.Blocks(css=custom_css, theme=gr.themes.Default(primary_hue="blue", neutral_hue="slate"), css=css, title="Liquid d1 Control Room") as demo:
     gr.Markdown("""
-    # 🛰️ Decision Intelligence Engine: Executive Control Room
+    <div class="hero-header">
+  <h1 style="margin: 0 0 8px 0; color: #f0f6fc; font-size: 26px;">🛰️ Decision Intelligence Engine: Executive Control Room</h1>
+  <p style="margin: 0 0 14px 0; color: #8b949e; font-size: 14px;">Deterministic probability routing, confidence calibration, and latency telemetry powered by OpenRouter and Liquid AI <code>liquid/d1-ultra</code>.</p>
+  <div>
+    <span class="metric-pill">⚡ System One Architecture</span>
+    <span class="metric-pill">🎯 Calibrated Probability ([0.0, 1.0])</span>
+    <span class="metric-pill">⏱️ Zero-Generation-Token Inference</span>
+    <span class="metric-pill">🛡️ Mathematical Risk Gating</span>
+  </div>
+</div>
     **OpenRouter / Liquid AI d1-ultra Backbone** • Single-pass deterministic probability calibration across Aviation Operations, Macro Financial Shocks, and RF Spectrum Telemetry.
     """)
 
