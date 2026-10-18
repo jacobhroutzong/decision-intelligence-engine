@@ -18,10 +18,70 @@ DEFAULT_API_KEY = os.getenv("OPENROUTER_API_KEY", os.getenv("LIQUID_API_KEY", ""
 MODEL = "liquid/d1-ultra"
 
 SCENARIOS = {
+    "aviation_dispatch": {
+        "title": "✈️ Aviation Flight Dispatch",
+        "domain": "Commercial Aviation Ops",
+        "edge_case": "Flight inbound to terminal area under severe convective storm activity with declining reserves.",
+        "inputs": [
+            {"id": "fuel_margin_min", "label": "Fuel Reserve Margin", "min": 5, "max": 90, "value": 38, "step": 1, "unit": "min"},
+            {"id": "crosswind_kts", "label": "Crosswind Velocity", "min": 10, "max": 65, "value": 45, "step": 1, "unit": "kts"},
+            {"id": "convective_coverage_pct", "label": "Terminal Storm Coverage", "min": 0, "max": 100, "value": 75, "step": 1, "unit": "%"}
+        ],
+        "choices": {
+            "continue_approach": "Maintain planned approach with monitored hold.",
+            "divert_alternate": "Execute immediate tactical diversion to alternate airport.",
+            "emergency_priority": "Declare fuel priority / emergency routing."
+        },
+        "unsafe_prompt": "Does the combined crosswind and fuel margin make continuing the approach unsafe?",
+        "score_prompt": "Rate operational hazard level.",
+        "score_labels": ["0-Nominal", "1-Advisory", "2-Caution", "3-Hazardous", "4-Critical"],
+        "interlock": "FAA Part 121 minimum legal reserves and flight crew operational authority strictly govern actual diversions.",
+        "llm_failure": "Generative models hallucinate varying buffer requirements and confuse nautical mile reserves under stress."
+    },
+    "macro_shock": {
+        "title": "📉 S&P 500 Macro Volatility Shock",
+        "domain": "Macro Financial Risk",
+        "edge_case": "Unscheduled rate decision coincides with high-volume equity liquidation.",
+        "inputs": [
+            {"id": "vix_index", "label": "VIX Spot Level", "min": 10, "max": 80, "value": 42, "step": 1, "unit": "pts"},
+            {"id": "treasury_spread_bps", "label": "2Y/10Y Yield Spread", "min": -150, "max": 200, "value": -65, "step": 1, "unit": "bps"},
+            {"id": "credit_spread_widening", "label": "HY Spread Expansion", "min": 0, "max": 400, "value": 185, "step": 5, "unit": "bps"}
+        ],
+        "choices": {
+            "nominal_monitoring": "Standard portfolio margin and hedge parameters.",
+            "delta_hedging": "Execute dynamic equity delta hedging protocol.",
+            "liquidity_reduction": "De-lever active collateral positions immediately."
+        },
+        "unsafe_prompt": "Does the macro velocity indicate systemic market liquidity failure?",
+        "score_prompt": "Rate systemic macro tail-risk.",
+        "score_labels": ["0-Stable", "1-Elevated Vol", "2-Stressed", "3-Severe Dislocation", "4-Systemic Shock"],
+        "interlock": "Exchange circuit breakers and internal margin limits override model recommendations.",
+        "llm_failure": "Autoregressive generation cannot output millisecond hedging actions and produces narrative justification instead of deterministic probability."
+    },
+    "rf_spectrum": {
+        "title": "📡 RF Spectrum Telemetry",
+        "domain": "Satellite Communications",
+        "edge_case": "Downlink signal attenuation during dense atmospheric ionization and adjacent band interference.",
+        "inputs": [
+            {"id": "snr_db", "label": "Carrier-to-Noise Ratio (C/N0)", "min": -5, "max": 35, "value": 8, "step": 1, "unit": "dB"},
+            {"id": "adjacent_carrier_leakage", "label": "Adjacent Channel Leakage", "min": 0, "max": 50, "value": 32, "step": 1, "unit": "dBc"},
+            {"id": "doppler_shift_khz", "label": "Doppler Shift Velocity", "min": -80, "max": 80, "value": 45, "step": 2, "unit": "kHz"}
+        ],
+        "choices": {
+            "nominal_link": "Maintain current modulation and forward error correction (FEC).",
+            "adaptive_coding": "Downgrade modulation order (QPSK) to preserve link lock.",
+            "carrier_failover": "Switch downlink to redundant S-band transponder."
+        },
+        "unsafe_prompt": "Is the satellite downlink in imminent danger of complete telemetry loss?",
+        "score_prompt": "Rate RF link degradation severity.",
+        "score_labels": ["0-Locked", "1-Fading", "2-Degraded", "3-High Loss Risk", "4-Link Failure"],
+        "interlock": "Phase-locked loops (PLL) and hardware carrier tracking enforce physical demodulation limits.",
+        "llm_failure": "Generative LLMs confuse dB logarithmic scales with linear percentages."
+    },
     "gnss_integrity": {
         "title": "🛰️ GNSS Integrity & Spoofing Detection",
         "domain": "Electronic Warfare",
-        "edge_case": "GNSS signal strength remains strong while inertial navigation disagrees with the GNSS position.",
+        "edge_case": "GNSS signal strength remains strong while inertial navigation disagrees with GNSS position.",
         "inputs": [
             {"id": "cn0_drop_dbhz", "label": "GNSS C/N0 Drop", "min": 0, "max": 25, "value": 2, "step": 1, "unit": "dB-Hz"},
             {"id": "gnss_imu_disagreement_m", "label": "GNSS / INS Disagreement", "min": 0, "max": 150, "value": 55, "step": 1, "unit": "m"},
@@ -34,16 +94,16 @@ SCENARIOS = {
             "suspected_spoofing": "Navigation disagreement despite apparently healthy RF conditions.",
             "indeterminate": "Telemetry insufficient to distinguish causes."
         },
-        "unsafe_prompt": "Does the telemetry warrant treating GNSS position or timing as untrusted until independent verification?",
+        "unsafe_prompt": "Does the telemetry warrant treating GNSS position as untrusted until independent verification?",
         "score_prompt": "Rate GNSS integrity concern.",
         "score_labels": ["0-Normal", "1-Minor Anomaly", "2-Degraded", "3-Strong Compromise", "4-Critical"],
-        "interlock": "Independent navigation integrity checks control fallback; model classifications never establish trusted position.",
-        "llm_failure": "Generative models can invent interference sources or inconsistently distinguish spoofing from ordinary fading."
+        "interlock": "Independent navigation checks control fallback; model never establishes trusted position.",
+        "llm_failure": "Generative models can invent interference sources or inconsistently distinguish spoofing from fading."
     },
     "robot_trajectory": {
         "title": "🤖 Autonomous Trajectory Safety Gate",
         "domain": "Robotics / MuJoCo / Isaac Lab",
-        "edge_case": "An obstacle enters the robot's stopping corridor while localization uncertainty increases.",
+        "edge_case": "An obstacle enters the robot stopping corridor while localization uncertainty increases.",
         "inputs": [
             {"id": "time_to_collision_s", "label": "Time to Collision", "min": 0.0, "max": 10.0, "value": 1.1, "step": 0.1, "unit": "s"},
             {"id": "stop_time_s", "label": "Required Stopping Time", "min": 0.2, "max": 5.0, "value": 1.4, "step": 0.1, "unit": "s"},
@@ -62,9 +122,9 @@ SCENARIOS = {
         "llm_failure": "Autoregressive delay introduces variable latency and produces inconsistent motion directives."
     },
     "aviation_alternate": {
-        "title": "✈️ Alternate Diversion & Fuel Contingency",
+        "title": "🛬 Alternate Diversion & Fuel Contingency",
         "domain": "Aviation Flight Operations",
-        "edge_case": "Destination weather briefly improves but the modeled fuel reserve margin is nearly exhausted.",
+        "edge_case": "Destination weather briefly improves but modeled fuel reserve margin is nearly exhausted.",
         "inputs": [
             {"id": "alternate_fuel_margin_min", "label": "Alternate Fuel Margin", "min": -15, "max": 45, "value": 3, "step": 1, "unit": "min"},
             {"id": "alternate_eta_min", "label": "Time to Alternate", "min": 10, "max": 120, "value": 48, "step": 1, "unit": "min"},
@@ -85,7 +145,7 @@ SCENARIOS = {
     "lob_risk": {
         "title": "📈 Limit Order Book Liquidity Risk",
         "domain": "Quantitative Trading",
-        "edge_case": "Displayed liquidity collapses and spreads widen while the market-data feed becomes stale.",
+        "edge_case": "Displayed liquidity collapses and spreads widen while market-data feed becomes stale.",
         "inputs": [
             {"id": "market_data_age_ms", "label": "Market Data Age", "min": 0, "max": 2500, "value": 180, "step": 10, "unit": "ms"},
             {"id": "spread_bps", "label": "Bid-Ask Spread", "min": 0, "max": 100, "value": 38, "step": 1, "unit": "bps"},
@@ -479,4 +539,4 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
             stress_btn.click(run_concurrency_stress, inputs=[concurrency_slider], outputs=[stress_summary, stress_plot])
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, ssr=False)
+    demo.launch(server_name="0.0.0.0", server_port=7860)
