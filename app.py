@@ -27,7 +27,7 @@ def resolve_client(override_key: str = ""):
         )
     
     # Route directly via OpenRouter proxy endpoint
-    base_url = "https://openrouter.ai/api/v1"
+    base_url = "https://openrouter.ai/api"
     return TypeSafeClient(api_key=active_key, base_url=base_url, model="liquid/d1-ultra")
 
 # -------------------------------------------------------------
