@@ -160,11 +160,25 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
     res = client.system_one(state=state, questions=questions)
     latency_ms = (time.perf_counter() - t0) * 1000.0
 
-    c_res = res.decision
-    n_res = res.unsafe
-    s_res = res.severity
+    # Safely unpack answers whether returned as attribute or dictionary
+    answers = getattr(res, "answers", res)
+    if isinstance(answers, dict):
+        c_res = answers.get("decision")
+        n_res = answers.get("unsafe")
+        s_res = answers.get("severity")
+    else:
+        c_res = getattr(answers, "decision", None)
+        n_res = getattr(answers, "unsafe", None)
+        s_res = getattr(answers, "severity", None)
 
-    conf_pct = c_res.confidence * 100.0
+    # Normalize response fields for dict or pydantic objects
+    c_choice = getattr(c_res, "choice", None) or (c_res.get("choice") if isinstance(c_res, dict) else "unknown")
+    c_conf = getattr(c_res, "confidence", 0.0) or (c_res.get("confidence", 0.0) if isinstance(c_res, dict) else 0.0)
+    c_probs = getattr(c_res, "probabilities", {}) or (c_res.get("probabilities", {}) if isinstance(c_res, dict) else {})
+    n_val = getattr(n_res, "noul", 0.0) or (n_res.get("noul", 0.0) if isinstance(n_res, dict) else 0.0)
+    s_val = getattr(s_res, "score", 0.0) or (s_res.get("score", 0.0) if isinstance(s_res, dict) else 0.0)
+
+    conf_pct = c_conf * 100.0
     passed_gate = conf_pct >= threshold
 
     gate_bg = "#0d4429" if passed_gate else "#541c15"
@@ -176,13 +190,13 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
     <div style="background:{gate_bg}; border:1px solid {gate_border}; border-radius:8px; padding:16px; margin-bottom:14px;">
         <div style="font-size:11px; letter-spacing:1px; text-transform:uppercase; color:{gate_color}; font-weight:700;">{gate_status}</div>
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:8px;">
-            <div style="font-size:20px; font-weight:700; color:#f0f6fc;">Primary Route: {c_res.choice.upper()}</div>
+            <div style="font-size:20px; font-weight:700; color:#f0f6fc;">Primary Route: {c_choice.upper()}</div>
             <div style="font-size:16px; font-weight:600; color:#58a6ff;">Latency: {latency_ms:.1f}ms</div>
         </div>
         <div style="font-size:13px; color:#8b949e; margin-top:4px;">
             Confidence: <b style="color:#f0f6fc;">{conf_pct:.1f}%</b> (Threshold: {threshold}%) &nbsp;|&nbsp;
-            Unsafe Risk Flag: <b style="color:#f85149;">{n_res.noul:.1%}</b> &nbsp;|&nbsp;
-            Severity Score: <b style="color:#d29922;">{s_res.score:.2f} / 4.0</b>
+            Unsafe Risk Flag: <b style="color:#f85149;">{n_val:.1%}</b> &nbsp;|&nbsp;
+            Severity Score: <b style="color:#d29922;">{s_val:.2f} / 4.0</b>
         </div>
     </div>
     """
@@ -190,9 +204,9 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
     plt.style.use('dark_background')
     fig, (ax_bar, ax_metrics) = plt.subplots(1, 2, figsize=(10, 3.4), facecolor='#0d1117', gridspec_kw={'width_ratios': [2, 1]})
 
-    labels = [k for k in c_res.probabilities.keys()]
-    probs = [c_res.probabilities[k] for k in labels]
-    colors = ['#388bfd' if k == c_res.choice else '#30363d' for k in labels]
+    labels = [k for k in c_probs.keys()]
+    probs = [c_probs[k] for k in labels]
+    colors = ['#388bfd' if k == c_choice else '#30363d' for k in labels]
 
     ax_bar.set_facecolor('#0d1117')
     bars = ax_bar.barh(labels, probs, color=colors, height=0.55)
@@ -210,14 +224,14 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
 
     ax_metrics.text(0, 1.7, "BINARY RISK (NOUL)", fontsize=9, color='#8b949e', weight='bold')
     ax_metrics.barh(1.4, 1.0, color='#21262d', height=0.25)
-    risk_color = '#f85149' if n_res.noul > 0.5 else '#3fb950'
-    ax_metrics.barh(1.4, n_res.noul, color=risk_color, height=0.25)
-    ax_metrics.text(1.05, 1.4, f"{n_res.noul:.1%}", va='center', color=risk_color, fontsize=10, weight='bold')
+    risk_color = '#f85149' if n_val > 0.5 else '#3fb950'
+    ax_metrics.barh(1.4, n_val, color=risk_color, height=0.25)
+    ax_metrics.text(1.05, 1.4, f"{n_val:.1%}", va='center', color=risk_color, fontsize=10, weight='bold')
 
     ax_metrics.text(0, 0.75, "SEVERITY SCORE (0 - 4)", fontsize=9, color='#8b949e', weight='bold')
     ax_metrics.barh(0.45, 1.0, color='#21262d', height=0.25)
-    ax_metrics.barh(0.45, s_res.score / 4.0, color='#a371f7', height=0.25)
-    ax_metrics.text(1.05, 0.45, f"{s_res.score:.2f}", va='center', color='#bc8cff', fontsize=10, weight='bold')
+    ax_metrics.barh(0.45, s_val / 4.0, color='#a371f7', height=0.25)
+    ax_metrics.text(1.05, 0.45, f"{s_val:.2f}", va='center', color='#bc8cff', fontsize=10, weight='bold')
 
     plt.tight_layout()
 
@@ -227,11 +241,11 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
         "domain": sc["domain"],
         "latency_ms": round(latency_ms, 2),
         "speculative_gate_passed": passed_gate,
-        "choice": c_res.choice,
-        "confidence": round(c_res.confidence, 4),
-        "probabilities": {k: round(v, 4) for k, v in c_res.probabilities.items()},
-        "unsafe_probability": round(n_res.noul, 4),
-        "severity_score": round(s_res.score, 3),
+        "choice": c_choice,
+        "confidence": round(c_conf, 4),
+        "probabilities": {k: round(v, 4) for k, v in c_probs.items()},
+        "unsafe_probability": round(n_val, 4),
+        "severity_score": round(s_val, 3),
         "deterministic_interlock": sc["interlock"],
         "why_generative_llms_fail": sc["llm_failure"]
     }, indent=2)
@@ -465,4 +479,4 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
             stress_btn.click(run_concurrency_stress, inputs=[concurrency_slider], outputs=[stress_summary, stress_plot])
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, ssr=False)
