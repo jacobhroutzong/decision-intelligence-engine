@@ -18,30 +18,157 @@ DEFAULT_API_KEY = os.getenv("OPENROUTER_API_KEY", os.getenv("LIQUID_API_KEY", ""
 MODEL = "liquid/d1-ultra"
 
 SCENARIOS = {
-    "aviation_dispatch": {
-        "title": "✈️ Aviation Flight Dispatch",
-        "domain": "Commercial Aviation Ops",
-        "edge_case": "Flight inbound to terminal area under severe convective storm activity with declining reserves.",
+    "aviation_operations": {
+        "title": "✈️ Commercial Aviation Dispatch & Diversion",
+        "domain": "Flight Operations & Tactical Routing",
+        "summary": "Supervises commercial flight safety when deteriorating weather at the destination airport conflicts with finite emergency fuel reserves.",
+        "edge_case": "Terminal convective storms and gusting crosswinds active while projected alternate fuel reserve margin is near minimum legal exhaustion.",
+        "plain_telemetry": [
+            ("Alternate Fuel Reserve Margin", "Minutes of fuel remaining above the mandatory legal minimum. Near zero means the aircraft cannot hold in the air much longer."),
+            ("Destination Crosswind Velocity", "Wind blowing perpendicular to the runway. Higher knots force severe crab angles and risk runway excursion."),
+            ("Time to Alternate Field", "Flight duration to the backup diversion airport if the current approach is abandoned.")
+        ],
+        "plain_outputs": "Categorizes tactical action (Continue Approach, Divert to Alternate, or ATC Emergency Priority), assigns binary mandatory safety risk, and scores operational emergency severity (0 to 4).",
         "inputs": [
-            {"id": "fuel_margin_min", "label": "Fuel Reserve Margin", "min": 5, "max": 90, "value": 38, "step": 1, "unit": "min"},
-            {"id": "crosswind_kts", "label": "Crosswind Velocity", "min": 10, "max": 65, "value": 45, "step": 1, "unit": "kts"},
-            {"id": "convective_coverage_pct", "label": "Terminal Storm Coverage", "min": 0, "max": 100, "value": 75, "step": 1, "unit": "%"}
+            {"id": "alternate_fuel_margin_min", "label": "Alternate Fuel Reserve Margin", "min": -10, "max": 60, "value": 4, "step": 1, "unit": "min"},
+            {"id": "crosswind_kts", "label": "Destination Crosswind Velocity", "min": 10, "max": 65, "value": 42, "step": 1, "unit": "kts"},
+            {"id": "alternate_eta_min", "label": "Time to Alternate Field", "min": 10, "max": 120, "value": 45, "step": 1, "unit": "min"}
         ],
         "choices": {
-            "continue_approach": "Maintain planned approach with monitored hold.",
-            "divert_alternate": "Execute immediate tactical diversion to alternate airport.",
-            "emergency_priority": "Declare fuel priority / emergency routing."
+            "continue_approach": "Maintain planned terminal approach with monitored holding.",
+            "divert_alternate": "Execute tactical diversion to designated alternate airport.",
+            "emergency_priority": "Declare fuel priority / emergency coordination with ATC."
         },
-        "unsafe_prompt": "Does the combined crosswind and fuel margin make continuing the approach unsafe?",
-        "score_prompt": "Rate operational hazard level.",
-        "score_labels": ["0-Nominal", "1-Advisory", "2-Caution", "3-Hazardous", "4-Critical"],
-        "interlock": "FAA Part 121 minimum legal reserves and flight crew operational authority strictly govern actual diversions.",
-        "llm_failure": "Generative models hallucinate varying buffer requirements and confuse nautical mile reserves under stress."
+        "unsafe_prompt": "Does the combined crosswind and marginal alternate fuel reserve warrant an immediate mandatory diversion?",
+        "score_prompt": "Rate operational hazard severity.",
+        "score_labels": ["0-Routine", "1-Advisory", "2-Caution", "3-Hazardous Concern", "4-Critical Emergency"],
+        "interlock": "FAA Part 121 legal fuel reserves, aircraft limitations, and captain command authority strictly govern physical diversions.",
+        "llm_failure": "Generative models produce contradictory holding vs. diversion directives across runs when margins are near zero."
+    },
+    "robot_trajectory": {
+        "title": "🤖 Autonomous Trajectory Safety Gate",
+        "domain": "Robotics & Autonomous Motion",
+        "summary": "Monitors mobile robot navigation corridors in real time to stop or reroute the machine before high-speed physical collisions occur.",
+        "edge_case": "An obstacle enters the robot stopping corridor while localization uncertainty increases.",
+        "plain_telemetry": [
+            ("Time to Collision", "Seconds remaining at current speed before impact if neither the obstacle nor robot changes course."),
+            ("Required Stopping Time", "Time in seconds required for the physical brakes/motors to bring the robot to a complete halt."),
+            ("Localization Uncertainty (Sigma)", "How unsure the robot's onboard sensors are about its own physical GPS/LiDAR coordinates.")
+        ],
+        "plain_outputs": "Routes motion supervision (Proceed, Replan Path, Emergency Protective Stop, or Manual Review), flags immediate collision breach risk, and rates physical hazard severity.",
+        "inputs": [
+            {"id": "time_to_collision_s", "label": "Time to Collision", "min": 0.0, "max": 10.0, "value": 1.1, "step": 0.1, "unit": "s"},
+            {"id": "stop_time_s", "label": "Required Stopping Time", "min": 0.2, "max": 5.0, "value": 1.4, "step": 0.1, "unit": "s"},
+            {"id": "localization_sigma_m", "label": "Localization Uncertainty (Sigma)", "min": 0.0, "max": 2.0, "value": 0.8, "step": 0.05, "unit": "m"}
+        ],
+        "choices": {
+            "proceed": "Current trajectory appears acceptable.",
+            "replan": "Compute alternative evasive trajectory corridor.",
+            "controlled_stop": "Execute emergency controlled protective stop.",
+            "manual_review": "Uncertainty prevents reliable classification."
+        },
+        "unsafe_prompt": "Would maintaining the current trajectory create an unacceptable collision margin?",
+        "score_prompt": "Rate trajectory collision risk concern.",
+        "score_labels": ["0-Clear", "1-Minor Proximity", "2-Reduced Margin", "3-High Concern", "4-Imminent Collision"],
+        "interlock": "Real-time safety hardware controllers override model commands when stopping time exceeds collision envelope.",
+        "llm_failure": "Autoregressive streaming introduces variable token latency and produces inconsistent motion directives."
+    },
+    "gnss_integrity": {
+        "title": "🛰️ Electronic Warfare & GNSS Integrity",
+        "domain": "Aerospace & RF Navigation",
+        "summary": "Detects hostile electronic jamming and GPS spoofing attacks where fake navigation signals attempt to deceive autonomous aircraft or maritime vessels.",
+        "edge_case": "GNSS signal strength remains strong while inertial navigation disagrees with GNSS position.",
+        "plain_telemetry": [
+            ("GNSS C/N0 Drop", "Signal carrier power drop. Normal drops mean poor line of sight; low drop with position error strongly implies spoofing."),
+            ("GNSS / INS Position Delta", "Physical distance discrepancy between satellite GPS coordinates and onboard internal inertial gyroscope/accelerometer readings."),
+            ("RF Noise Floor Rise", "Background electromagnetic noise. A massive spike signals active brute-force RF jamming.")
+        ],
+        "plain_outputs": "Classifies RF threat status (Nominal, Natural Fading, Active Jamming, Malicious Spoofing), sets untrusted navigation flag, and rates electronic integrity compromise severity.",
+        "inputs": [
+            {"id": "cn0_drop_dbhz", "label": "GNSS C/N0 Drop", "min": 0, "max": 25, "value": 2, "step": 1, "unit": "dB-Hz"},
+            {"id": "gnss_imu_disagreement_m", "label": "GNSS / INS Position Delta", "min": 0, "max": 150, "value": 55, "step": 1, "unit": "m"},
+            {"id": "noise_floor_rise_db", "label": "RF Noise Floor Rise", "min": 0, "max": 30, "value": 1, "step": 1, "unit": "dB"}
+        ],
+        "choices": {
+            "nominal": "No meaningful integrity anomaly.",
+            "fading": "Signal attenuation from multipath or shadowing.",
+            "jamming": "High RF noise floor indicating intentional jamming.",
+            "suspected_spoofing": "Navigation disagreement despite healthy RF floor (spoofing indicator).",
+            "indeterminate": "Telemetry insufficient to distinguish root causes."
+        },
+        "unsafe_prompt": "Does the telemetry warrant treating GNSS position as compromised until verified?",
+        "score_prompt": "Rate GNSS integrity concern.",
+        "score_labels": ["0-Normal", "1-Minor Anomaly", "2-Degraded", "3-Strong Compromise", "4-Critical"],
+        "interlock": "Kalman filters and INS voting interlocks govern fallback; model outputs never establish trusted coordinates.",
+        "llm_failure": "Generative models frequently fail to detect spoofing when raw signal strength metrics remain deceptively strong."
+    },
+    "lob_risk": {
+        "title": "📈 High-Frequency Limit Order Book Risk",
+        "domain": "Quantitative Market Making",
+        "summary": "Protects algorithmic market makers from catastrophic flash-crashes by managing quote cancellations when exchange liquidity evaporates.",
+        "edge_case": "Displayed liquidity collapses and spreads widen while market-data feed becomes stale.",
+        "plain_telemetry": [
+            ("Market Data Feed Staleness", "Age of exchange incoming price packets in milliseconds. Old data means the algorithm is blind to recent order executions."),
+            ("Bid-Ask Spread", "The gap between the highest price buyers offer and lowest price sellers accept. Wide gaps mean extreme trading risk."),
+            ("Top-of-Book Depth Collapse", "Percentage of the immediate buying/selling cushion that suddenly disappeared. 80%+ means any trade will cause severe price slippage.")
+        ],
+        "plain_outputs": "Determines quoting posture (Normal, Spread Widening / Risk Reduction, Active Quote Cancellation, Immediate Strategy Kill-Switch Halt), checks unsafe market flag, and scores liquidity disruption severity.",
+        "inputs": [
+            {"id": "market_data_age_ms", "label": "Market Data Feed Staleness", "min": 0, "max": 2500, "value": 180, "step": 10, "unit": "ms"},
+            {"id": "spread_bps", "label": "Bid-Ask Spread", "min": 0, "max": 100, "value": 38, "step": 1, "unit": "bps"},
+            {"id": "depth_drop_pct", "label": "Top-of-Book Depth Collapse", "min": 0, "max": 100, "value": 82, "step": 1, "unit": "%"}
+        ],
+        "choices": {
+            "normal": "Continue quoting within standard risk envelopes.",
+            "reduce_risk": "Widen quotation spreads and trim inventory risk.",
+            "cancel_review": "Cancel active limit orders pending liquidity recovery.",
+            "strategy_halt": "Trigger strategy kill-switch and suspend quoting."
+        },
+        "unsafe_prompt": "Is continued live quoting unsafe without market-data and liquidity revalidation?",
+        "score_prompt": "Rate market-making operating risk.",
+        "score_labels": ["0-Normal", "1-Mild Deterioration", "2-Elevated Risk", "3-Severe Disruption", "4-Critical Halt"],
+        "interlock": "Exchange connectivity limits, stale-feed timers, and hardware kill-switches remain deterministic.",
+        "llm_failure": "Token streaming cannot meet execution deadlines and hallucinates non-existent order depth."
+    },
+    "gpu_thermal": {
+        "title": "⚡ AI Cluster & Thermal Incident",
+        "domain": "Data Center Infrastructure",
+        "summary": "Detects early cooling failure in multi-million dollar AI training clusters to throttle or evacuate compute loads before permanent hardware damage occurs.",
+        "edge_case": "GPU hotspot temperature remains acceptable briefly despite severe cooling-flow degradation.",
+        "plain_telemetry": [
+            ("GPU Hotspot Temp", "Peak instantaneous silicon temperature on the graphics processor die."),
+            ("Coolant Flow / Nominal", "Mass flow rate of liquid coolant circulating through the compute rack. Drops below 30% precede rapid thermal runaway."),
+            ("Rack Inlet Temp", "Ambient server room air intake temperature entering the chassis.")
+        ],
+        "plain_outputs": "Supervises thermal mitigation (Nominal Monitor, Frequency Throttling, Workload Migration, Emergency Node Shutdown), checks unsafe compute flag, and scores thermal incident severity.",
+        "inputs": [
+            {"id": "gpu_hotspot_c", "label": "GPU Hotspot Temp", "min": 40, "max": 115, "value": 71, "step": 1, "unit": "°C"},
+            {"id": "coolant_flow_pct", "label": "Coolant Flow / Nominal", "min": 0, "max": 120, "value": 12, "step": 1, "unit": "%"},
+            {"id": "rack_inlet_c", "label": "Rack Inlet Temp", "min": 15, "max": 55, "value": 37, "step": 1, "unit": "°C"}
+        ],
+        "choices": {
+            "monitor": "Continue standard thermal monitoring.",
+            "throttle_review": "Apply dynamic frequency throttling to compute nodes.",
+            "migrate_review": "Migrate active AI training workloads to redundant racks.",
+            "isolate_escalate": "Isolate cooling loop and execute emergency node shutdown."
+        },
+        "unsafe_prompt": "Is continued full-load compute unsafe without independent cooling verification?",
+        "score_prompt": "Rate thermal incident severity.",
+        "score_labels": ["0-Normal", "1-Minor Deviation", "2-Reduced Redundancy", "3-Severe Concern", "4-Critical Failure"],
+        "interlock": "BMC and hardware thermal fuses cut power automatically; AI has zero direct power control.",
+        "llm_failure": "Prose models focus on current temperature and miss the drop in cooling flow preceding thermal runaway."
     },
     "macro_shock": {
         "title": "📉 S&P 500 Macro Volatility Shock",
         "domain": "Macro Financial Risk",
+        "summary": "Assesses systemic capital market dislocation across sovereign bonds and equities to adjust asset manager hedging allocations.",
         "edge_case": "Unscheduled rate decision coincides with high-volume equity liquidation.",
+        "plain_telemetry": [
+            ("VIX Spot Level", "The 'Wall Street Fear Gauge' reflecting expected 30-day market volatility. Above 35 indicates active crisis conditions."),
+            ("2Y/10Y Yield Spread", "Yield inversion between short-term and long-term US Treasury bonds. Negative values signal severe economic recession expectations."),
+            ("HY Spread Expansion", "High-Yield corporate credit spread widening in basis points. Large surges mean corporate debt default fears are spiking.")
+        ],
+        "plain_outputs": "Directs macro treasury risk response (Nominal Monitoring, Dynamic Delta Hedging, Collateral Deleveraging), checks systemic failure flag, and rates systemic tail-risk severity.",
         "inputs": [
             {"id": "vix_index", "label": "VIX Spot Level", "min": 10, "max": 80, "value": 42, "step": 1, "unit": "pts"},
             {"id": "treasury_spread_bps", "label": "2Y/10Y Yield Spread", "min": -150, "max": 200, "value": -65, "step": 1, "unit": "bps"},
@@ -59,9 +186,16 @@ SCENARIOS = {
         "llm_failure": "Autoregressive generation cannot output millisecond hedging actions and produces narrative justification instead of deterministic probability."
     },
     "rf_spectrum": {
-        "title": "📡 RF Spectrum Telemetry",
+        "title": "📡 Satellite RF Spectrum Degradation",
         "domain": "Satellite Communications",
+        "summary": "Maintains deep-space and low-Earth-orbit communication links by automatically adapting modulation schemes during heavy atmospheric interference.",
         "edge_case": "Downlink signal attenuation during dense atmospheric ionization and adjacent band interference.",
+        "plain_telemetry": [
+            ("Carrier-to-Noise Ratio (C/N0)", "Raw signal clarity vs background noise in decibels. Low values cause dropped communication frames."),
+            ("Adjacent Channel Leakage", "Interference leaking into the downlink from nearby frequency bands."),
+            ("Doppler Shift Velocity", "Frequency distortion caused by the satellite moving at thousands of kilometers per hour relative to the ground receiver.")
+        ],
+        "plain_outputs": "Selects RF link optimization (Maintain Nominal Link, Adaptive Low-Order Coding Fallback, Switch to Redundant Carrier), evaluates link loss risk, and scores RF degradation severity.",
         "inputs": [
             {"id": "snr_db", "label": "Carrier-to-Noise Ratio (C/N0)", "min": -5, "max": 35, "value": 8, "step": 1, "unit": "dB"},
             {"id": "adjacent_carrier_leakage", "label": "Adjacent Channel Leakage", "min": 0, "max": 50, "value": 32, "step": 1, "unit": "dBc"},
@@ -77,112 +211,6 @@ SCENARIOS = {
         "score_labels": ["0-Locked", "1-Fading", "2-Degraded", "3-High Loss Risk", "4-Link Failure"],
         "interlock": "Phase-locked loops (PLL) and hardware carrier tracking enforce physical demodulation limits.",
         "llm_failure": "Generative LLMs confuse dB logarithmic scales with linear percentages."
-    },
-    "gnss_integrity": {
-        "title": "🛰️ GNSS Integrity & Spoofing Detection",
-        "domain": "Electronic Warfare",
-        "edge_case": "GNSS signal strength remains strong while inertial navigation disagrees with GNSS position.",
-        "inputs": [
-            {"id": "cn0_drop_dbhz", "label": "GNSS C/N0 Drop", "min": 0, "max": 25, "value": 2, "step": 1, "unit": "dB-Hz"},
-            {"id": "gnss_imu_disagreement_m", "label": "GNSS / INS Disagreement", "min": 0, "max": 150, "value": 55, "step": 1, "unit": "m"},
-            {"id": "noise_floor_rise_db", "label": "RF Noise Floor Rise", "min": 0, "max": 30, "value": 1, "step": 1, "unit": "dB"}
-        ],
-        "choices": {
-            "nominal": "No meaningful integrity anomaly.",
-            "fading": "Weak reception or signal attenuation.",
-            "jamming": "Interference with elevated RF noise.",
-            "suspected_spoofing": "Navigation disagreement despite apparently healthy RF conditions.",
-            "indeterminate": "Telemetry insufficient to distinguish causes."
-        },
-        "unsafe_prompt": "Does the telemetry warrant treating GNSS position as untrusted until independent verification?",
-        "score_prompt": "Rate GNSS integrity concern.",
-        "score_labels": ["0-Normal", "1-Minor Anomaly", "2-Degraded", "3-Strong Compromise", "4-Critical"],
-        "interlock": "Independent navigation checks control fallback; model never establishes trusted position.",
-        "llm_failure": "Generative models can invent interference sources or inconsistently distinguish spoofing from fading."
-    },
-    "robot_trajectory": {
-        "title": "🤖 Autonomous Trajectory Safety Gate",
-        "domain": "Robotics / MuJoCo / Isaac Lab",
-        "edge_case": "An obstacle enters the robot stopping corridor while localization uncertainty increases.",
-        "inputs": [
-            {"id": "time_to_collision_s", "label": "Time to Collision", "min": 0.0, "max": 10.0, "value": 1.1, "step": 0.1, "unit": "s"},
-            {"id": "stop_time_s", "label": "Required Stopping Time", "min": 0.2, "max": 5.0, "value": 1.4, "step": 0.1, "unit": "s"},
-            {"id": "localization_sigma_m", "label": "Localization Uncertainty", "min": 0.0, "max": 2.0, "value": 0.8, "step": 0.05, "unit": "m"}
-        ],
-        "choices": {
-            "proceed": "Current trajectory appears acceptable.",
-            "replan": "Another trajectory should be evaluated.",
-            "controlled_stop": "Current trajectory should not continue without a protective stop.",
-            "manual_review": "Uncertainty prevents reliable classification."
-        },
-        "unsafe_prompt": "Would maintaining the current trajectory create an unacceptable collision margin?",
-        "score_prompt": "Rate trajectory safety concern.",
-        "score_labels": ["0-Clear", "1-Minor Proximity", "2-Reduced Margin", "3-High Concern", "4-Imminent"],
-        "interlock": "Simulation safety controller overrides model when stopping time exceeds time-to-collision.",
-        "llm_failure": "Autoregressive delay introduces variable latency and produces inconsistent motion directives."
-    },
-    "aviation_alternate": {
-        "title": "🛬 Alternate Diversion & Fuel Contingency",
-        "domain": "Aviation Flight Operations",
-        "edge_case": "Destination weather briefly improves but modeled fuel reserve margin is nearly exhausted.",
-        "inputs": [
-            {"id": "alternate_fuel_margin_min", "label": "Alternate Fuel Margin", "min": -15, "max": 45, "value": 3, "step": 1, "unit": "min"},
-            {"id": "alternate_eta_min", "label": "Time to Alternate", "min": 10, "max": 120, "value": 48, "step": 1, "unit": "min"},
-            {"id": "storm_distance_nm", "label": "Convective Weather Proximity", "min": 0, "max": 50, "value": 7, "step": 1, "unit": "NM"}
-        ],
-        "choices": {
-            "destination_review": "Continue evaluating destination feasibility.",
-            "alternate_review": "Prioritize evaluation of alternate diversion.",
-            "emergency_coordination": "Immediate crew and operations escalation may be warranted.",
-            "insufficient_data": "More certified flight planning data is needed."
-        },
-        "unsafe_prompt": "Does current weather and fuel picture warrant urgent operational safety review?",
-        "score_prompt": "Rate operational contingency severity.",
-        "score_labels": ["0-Routine", "1-Minor", "2-Reduced Flex", "3-Serious Concern", "4-Critical Contingency"],
-        "interlock": "Certified flight-planning limits, regulations, and captain authority strictly govern actual diversions.",
-        "llm_failure": "Narrative reasoning frequently confuses reserve margins with alternate feasibility under time pressure."
-    },
-    "lob_risk": {
-        "title": "📈 Limit Order Book Liquidity Risk",
-        "domain": "Quantitative Trading",
-        "edge_case": "Displayed liquidity collapses and spreads widen while market-data feed becomes stale.",
-        "inputs": [
-            {"id": "market_data_age_ms", "label": "Market Data Age", "min": 0, "max": 2500, "value": 180, "step": 10, "unit": "ms"},
-            {"id": "spread_bps", "label": "Bid-Ask Spread", "min": 0, "max": 100, "value": 38, "step": 1, "unit": "bps"},
-            {"id": "depth_drop_pct", "label": "Top-of-Book Depth Collapse", "min": 0, "max": 100, "value": 82, "step": 1, "unit": "%"}
-        ],
-        "choices": {
-            "normal": "Ordinary quoting conditions.",
-            "reduce_risk": "Liquidity deterioration needs review.",
-            "cancel_review": "Outstanding quotes may require cancellation.",
-            "strategy_halt": "Market or feed integrity warrants a halt."
-        },
-        "unsafe_prompt": "Is continued live quoting unsafe without market-data and liquidity revalidation?",
-        "score_prompt": "Rate market-making operating risk.",
-        "score_labels": ["0-Normal", "1-Mild Deterioration", "2-Elevated Risk", "3-Severe Disruption", "4-Critical Halt"],
-        "interlock": "Exchange connectivity limits, stale-feed timers, and hardware kill-switches remain deterministic.",
-        "llm_failure": "Token generation cannot meet execution deadlines and hallucinates non-existent order depth."
-    },
-    "gpu_thermal": {
-        "title": "⚡ GPU Cluster Thermal Incident",
-        "domain": "AI Infrastructure / Data Centers",
-        "edge_case": "GPU hotspot temperature remains acceptable briefly despite severe cooling-flow degradation.",
-        "inputs": [
-            {"id": "gpu_hotspot_c", "label": "GPU Hotspot Temp", "min": 40, "max": 115, "value": 71, "step": 1, "unit": "°C"},
-            {"id": "coolant_flow_pct", "label": "Coolant Flow / Nominal", "min": 0, "max": 120, "value": 12, "step": 1, "unit": "%"},
-            {"id": "rack_inlet_c", "label": "Rack Inlet Temp", "min": 15, "max": 55, "value": 37, "step": 1, "unit": "°C"}
-        ],
-        "choices": {
-            "monitor": "Continue normal monitoring.",
-            "throttle_review": "Review compute throttling.",
-            "migrate_review": "Review workload migration.",
-            "isolate_escalate": "Escalate potential cooling system failure."
-        },
-        "unsafe_prompt": "Is continued full-load compute unsafe without independent cooling verification?",
-        "score_prompt": "Rate infrastructure incident severity.",
-        "score_labels": ["0-Normal", "1-Minor Deviation", "2-Reduced Redundancy", "3-Severe Concern", "4-Critical Failure"],
-        "interlock": "BMC and hardware thermal protection cut power directly; no direct AI actuator control.",
-        "llm_failure": "Prose models focus on current temperature and miss the drop in cooling flow preceding thermal runaway."
     }
 }
 
@@ -312,18 +340,33 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
 
     return gate_html, fig, state, audit_payload
 
+def format_explainer(sc):
+    bullets = "\n".join([f"- **{label}:** {desc}" for label, desc in sc["plain_telemetry"]])
+    return f"""### 📖 Executive Briefing: {sc['title']}
+> **Operational Purpose:** {sc['summary']}
+
+**Telemetry Breakdown (Plain-English Inputs):**
+{bullets}
+
+**Decision Output Scope:**
+- {sc['plain_outputs']}
+
+**Why Single-Pass Calibration Outperforms Generative LLMs:**
+- *Interlock Architecture:* {sc['interlock']}
+- *LLM Failure Mode:* {sc['llm_failure']}
+---"""
+
 def on_scenario_change(title):
     key = KEY_BY_TITLE[title]
     sc = SCENARIOS[key]
     inp1 = sc["inputs"][0]
     inp2 = sc["inputs"][1]
     inp3 = sc["inputs"][2]
-    interlock_md = f"**Deterministic Safety Interlock:**\n> {sc['interlock']}\n\n**Why Generative Streaming LLMs Fail Here:**\n> {sc['llm_failure']}"
     return (
         gr.update(label=f"{inp1['label']} ({inp1['unit']})", minimum=inp1["min"], maximum=inp1["max"], value=inp1["value"], step=inp1["step"]),
         gr.update(label=f"{inp2['label']} ({inp2['unit']})", minimum=inp2["min"], maximum=inp2["max"], value=inp2["value"], step=inp2["step"]),
         gr.update(label=f"{inp3['label']} ({inp3['unit']})", minimum=inp3["min"], maximum=inp3["max"], value=inp3["value"], step=inp3["step"]),
-        interlock_md
+        format_explainer(sc)
     )
 
 custom_css = """
@@ -392,6 +435,7 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
                         value=SCENARIO_TITLES[0],
                         label="Mission-Critical Operational Domain"
                     )
+                    domain_explainer = gr.Markdown(format_explainer(SCENARIOS[SCENARIO_KEYS[0]]))
                     init_sc = SCENARIOS[SCENARIO_KEYS[0]]
                     slider1 = gr.Slider(
                         minimum=init_sc["inputs"][0]["min"],
@@ -433,7 +477,7 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
             scenario_dropdown.change(
                 on_scenario_change,
                 inputs=[scenario_dropdown],
-                outputs=[slider1, slider2, slider3, interlock_info]
+                outputs=[slider1, slider2, slider3, domain_explainer]
             )
 
             execute_btn.click(
