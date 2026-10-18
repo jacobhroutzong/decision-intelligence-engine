@@ -1,3 +1,11 @@
+import sys, types
+for _mod in ("audioop", "pyaudioop"):
+    if _mod not in sys.modules:
+        try:
+            __import__(_mod)
+        except ImportError:
+            sys.modules[_mod] = types.ModuleType(_mod)
+
 # app.py: Executive Decision Intelligence Control Room (OpenRouter / Liquid d1-ultra)
 import os
 import time
