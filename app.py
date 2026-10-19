@@ -340,6 +340,31 @@ def run_telemetry_forward_pass(scenario_title, val1, val2, val3, threshold, over
 
     return gate_html, fig, state, audit_payload
 
+def format_input_guide(sc):
+    bullets = ""
+    for label, desc, thresh in sc.get("param_guide", sc.get("plain_telemetry", [])):
+        if isinstance(thresh, str):
+            bullets += f"• **{label}**: {desc} <br>&nbsp;&nbsp;&nbsp;&nbsp;↳ <span class='threshold-badge'>{thresh}</span><br>"
+        else:
+            bullets += f"• **{label}**: {desc}<br>"
+    return f"""<div class="info-card">
+        <div class="info-card-header">🎛️ Input Telemetry Parameter Guide</div>
+        <div class="info-card-body">{bullets}</div>
+    </div>"""
+
+def format_output_decoder(sc):
+    decoder_text = sc.get("output_decoder", "• Choice: Categorical supervisory decision.\n• Noul: Binary safety envelope violation risk.\n• Score: Ordinal severity rating.")
+    decoder_html = decoder_text.replace("\n", "<br>")
+    return f"""<div class="info-card">
+        <div class="info-card-header">📊 Output & Threshold Decoder</div>
+        <div class="info-card-body">
+            {decoder_html}
+            <br><br>
+            <b>⚡ Confidence Threshold Logic:</b><br>
+            If model confidence is <b>≥ selected threshold</b>, the decision passes the <i>Speculative Gate</i> for autonomous execution. If <b>< threshold</b>, autonomous dispatch is halted for human verification.
+        </div>
+    </div>"""
+
 def format_explainer(sc):
     bullets = "\n".join([f"- **{label}:** {desc}" for label, desc in sc["plain_telemetry"]])
     return f"""### 📖 Executive Briefing: {sc['title']}
@@ -366,37 +391,85 @@ def on_scenario_change(title):
         gr.update(label=f"{inp1['label']} ({inp1['unit']})", minimum=inp1["min"], maximum=inp1["max"], value=inp1["value"], step=inp1["step"]),
         gr.update(label=f"{inp2['label']} ({inp2['unit']})", minimum=inp2["min"], maximum=inp2["max"], value=inp2["value"], step=inp2["step"]),
         gr.update(label=f"{inp3['label']} ({inp3['unit']})", minimum=inp3["min"], maximum=inp3["max"], value=inp3["value"], step=inp3["step"]),
-        format_explainer(sc)
+        format_explainer(sc),
+        format_input_guide(sc),
+        format_output_decoder(sc)
     )
 
 custom_css = """
-.gradio-container { background-color: #0d1117 !important; color: #c9d1d9 !important; }
-.hero-header {
-    background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
-    border: 1px solid #30363d;
-    border-radius: 10px;
-    padding: 22px;
-    margin-bottom: 18px;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
+
+code, pre, .mono-font {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+
+.gradio-container {
+    background-color: #0b0f19 !important;
+    color: #e2e8f0 !important;
+}
+
+/* Hero Section */
+.hero-header {
+    background: linear-gradient(135deg, #0f172a 0%, #0b0f19 100%);
+    border: 1px solid #1e293b;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+
 .metric-pill {
     display: inline-block;
-    padding: 3px 10px;
-    border-radius: 12px;
+    padding: 4px 12px;
+    border-radius: 9999px;
     font-size: 11px;
     font-weight: 600;
-    margin-right: 6px;
-    border: 1px solid #30363d;
-    background: #21262d;
-    color: #58a6ff;
+    margin-right: 8px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #38bdf8;
+    letter-spacing: 0.3px;
 }
-.tab-explainer {
-    background: #161b22;
-    border-left: 4px solid #1f6feb;
-    padding: 12px 16px;
-    border-radius: 0 8px 8px 0;
+
+/* Explainability Cards */
+.info-card {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 16px;
     margin-bottom: 14px;
+}
+
+.info-card-header {
     font-size: 13px;
-    color: #8b949e;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #38bdf8;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-card-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #94a3b8;
+}
+
+.threshold-badge {
+    color: #f1f5f9;
+    background: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #334155;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
 }
 """
 
@@ -436,6 +509,8 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
                         label="Mission-Critical Operational Domain"
                     )
                     domain_explainer = gr.Markdown(format_explainer(SCENARIOS[SCENARIO_KEYS[0]]))
+                    param_guide_display = gr.HTML(format_input_guide(SCENARIOS[SCENARIO_KEYS[0]]))
+                    output_decoder_display = gr.HTML(format_output_decoder(SCENARIOS[SCENARIO_KEYS[0]]))
                     init_sc = SCENARIOS[SCENARIO_KEYS[0]]
                     slider1 = gr.Slider(
                         minimum=init_sc["inputs"][0]["min"],
@@ -477,7 +552,7 @@ with gr.Blocks(css=custom_css, title="Decision Intelligence Engine") as demo:
             scenario_dropdown.change(
                 on_scenario_change,
                 inputs=[scenario_dropdown],
-                outputs=[slider1, slider2, slider3, domain_explainer]
+                outputs=[slider1, slider2, slider3, domain_explainer, param_guide_display, output_decoder_display]
             )
 
             execute_btn.click(
